@@ -1,17 +1,36 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import axios from 'axios';
 
-// Mock Data representing "Surging Views" videos over the last 15 days
-const MOCK_VIDEOS = [
+interface Video {
+  id: string;
+  title: string;
+  channel: string;
+  publishedAt: string;
+  views: string;
+  likes: string;
+  speed: string;
+  speedRaw: number;
+  viewsRaw: number;
+  engagementRaw: number;
+  thumbnail: string;
+  isHot: boolean;
+}
+
+// Mock Data for fallback or initial preview
+const MOCK_VIDEOS: Video[] = [
   {
     id: "v1",
     title: "I Built a Secret Room in My House! (Undiscovered)",
     channel: "Creator X",
     publishedAt: "2 days ago",
-    views: "2,450,120",
-    likes: "150k",
-    speed: "51k views/hr",
+    views: "2.4M",
+    likes: "150K",
+    speed: "51.0k views/hr",
+    speedRaw: 51000,
+    viewsRaw: 2400000,
+    engagementRaw: 0.0625,
     thumbnail: "https://images.unsplash.com/photo-1611162617474-5b21e879e113?w=500&h=280&fit=crop",
     isHot: true
   },
@@ -20,43 +39,13 @@ const MOCK_VIDEOS = [
     title: "10 AI Tools That Will Change Your Life in 2026",
     channel: "Tech Insiders",
     publishedAt: "5 days ago",
-    views: "1,120,000",
-    likes: "89k",
-    speed: "20k views/hr",
+    views: "1.1M",
+    likes: "89K",
+    speed: "20.0k views/hr",
+    speedRaw: 20000,
+    viewsRaw: 1100000,
+    engagementRaw: 0.08,
     thumbnail: "https://images.unsplash.com/photo-1677442136019-21780ecad995?w=500&h=280&fit=crop",
-    isHot: true
-  },
-  {
-    id: "v3",
-    title: "Why This Crypto Is Pumping Right Now...",
-    channel: "Finance Daily",
-    publishedAt: "1 day ago",
-    views: "890,000",
-    likes: "50k",
-    speed: "37k views/hr",
-    thumbnail: "https://images.unsplash.com/photo-1621416894569-0f39ed31d247?w=500&h=280&fit=crop",
-    isHot: true
-  },
-  {
-    id: "v4",
-    title: "My 30-Day Transformation (Shocking)",
-    channel: "Fitness Bro",
-    publishedAt: "12 days ago",
-    views: "3,500,000",
-    likes: "210k",
-    speed: "12k views/hr",
-    thumbnail: "https://images.unsplash.com/photo-1517836357463-d25dfeac3438?w=500&h=280&fit=crop",
-    isHot: false
-  },
-  {
-    id: "v5",
-    title: "You've Been Coding Wrong Your Entire Life",
-    channel: "Dev Guru",
-    publishedAt: "4 hours ago",
-    views: "350,000",
-    likes: "45k",
-    speed: "87k views/hr",
-    thumbnail: "https://images.unsplash.com/photo-1555066931-4365d14bab8c?w=500&h=280&fit=crop",
     isHot: true
   }
 ];
@@ -65,19 +54,80 @@ export default function Dashboard() {
   const [apiKey, setApiKey] = useState("");
   const [keyword, setKeyword] = useState("");
   const [isSearching, setIsSearching] = useState(false);
-  const [showConfig, setShowConfig] = useState(!apiKey);
+  const [showConfig, setShowConfig] = useState(false);
+  const [videos, setVideos] = useState<Video[]>([]);
+  const [error, setError] = useState("");
+  const [sortBy, setSortBy] = useState("speed");
+  const [isUsingMock, setIsUsingMock] = useState(true);
 
-  const handleSearch = (e: React.FormEvent) => {
+  // Load API Key from localStorage
+  useEffect(() => {
+    const savedKey = localStorage.getItem("yt_viral_api_key");
+    if (savedKey) {
+      setApiKey(savedKey);
+      setShowConfig(false);
+    } else {
+      setShowConfig(true);
+    }
+  }, []);
+
+  const handleSaveKey = () => {
+    if (!apiKey.trim()) {
+      alert("Please enter a valid API Key");
+      return;
+    }
+    localStorage.setItem("yt_viral_api_key", apiKey.trim());
+    alert("API Key saved successfully!");
+    setShowConfig(false);
+  };
+
+  const handleSearch = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!apiKey) {
+    if (!apiKey.trim()) {
       alert("Please configure your API Key first to enable real searches.");
       setShowConfig(true);
       return;
     }
+
+    if (!keyword.trim()) {
+      alert("Please enter a keyword to search");
+      return;
+    }
+
     setIsSearching(true);
-    // Simulate network request
-    setTimeout(() => setIsSearching(false), 1500);
+    setError("");
+    setIsUsingMock(false);
+
+    try {
+      const response = await axios.get('/api/youtube', {
+        params: { keyword, apiKey }
+      });
+
+      if (response.data.error) {
+        throw new Error(response.data.error);
+      }
+
+      setVideos(response.data.videos);
+      if (response.data.videos.length === 0) {
+        setError("No videos found for this keyword in the last 15 days.");
+      }
+    } catch (err: any) {
+      console.error(err);
+      setError(err.response?.data?.error || err.message || "Failed to fetch data. Check your API key.");
+      setIsUsingMock(true);
+      setVideos(MOCK_VIDEOS);
+    } finally {
+      setIsSearching(false);
+    }
   };
+
+  // Sorting logic
+  const sortedVideos = [...(videos.length > 0 ? videos : (isUsingMock ? MOCK_VIDEOS : []))].sort((a, b) => {
+    if (sortBy === "speed") return b.speedRaw - a.speedRaw;
+    if (sortBy === "views") return b.viewsRaw - a.viewsRaw;
+    if (sortBy === "engagement") return b.engagementRaw - a.engagementRaw;
+    return 0;
+  });
 
   return (
     <div className="space-y-8 animate-fade-in relative z-10 w-full overflow-hidden">
@@ -140,7 +190,10 @@ export default function Dashboard() {
                     onChange={(e) => setApiKey(e.target.value)}
                     className="flex-1 bg-black/20 border border-white/10 rounded-xl px-4 py-2 text-white placeholder-white/40 focus:outline-none focus:ring-1 focus:ring-brand-pink/50 transition-all text-sm"
                   />
-                  <button className="px-6 py-2 rounded-xl bg-white/10 hover:bg-white/20 text-white text-sm font-medium transition-colors">
+                  <button
+                    onClick={handleSaveKey}
+                    className="px-6 py-2 rounded-xl bg-gradient-to-r from-brand-purple to-brand-pink hover:opacity-90 text-white text-sm font-medium transition-colors"
+                  >
                     Save Key
                   </button>
                 </div>
@@ -151,7 +204,7 @@ export default function Dashboard() {
                 </div>
                 <h4 className="text-sm font-medium text-white">Need a Key?</h4>
                 <a href="https://console.cloud.google.com/" target="_blank" rel="noreferrer" className="text-xs text-brand-purple hover:text-brand-pink transition-colors underline underline-offset-2">
-                  Read our step-by-step guide on generating your free YouTube API Key.
+                  Get your free YouTube API Key.
                 </a>
               </div>
             </div>
@@ -159,28 +212,39 @@ export default function Dashboard() {
         )}
       </section>
 
+      {/* Error Message */}
+      {error && (
+        <div className="bg-red-500/10 border border-red-500/20 text-red-500 px-6 py-4 rounded-xl text-sm animate-fade-in">
+          ⚠️ {error}
+        </div>
+      )}
+
       {/* Stats/Filter Bar */}
       <div className="flex items-center justify-between px-2">
         <h2 className="text-xl font-bold flex items-center gap-3">
-          {isSearching ? "Searching..." : apiKey ? "Live Results" : "Mock Data Preview"}
+          {isSearching ? "Searching..." : isUsingMock ? "Mock Data Preview" : "Live Results"}
           <span className="text-sm font-normal text-white/50 bg-white/5 px-3 py-1 rounded-full border border-white/10">
             &le; 15 days ago
           </span>
         </h2>
 
         <div className="flex gap-2">
-          <select className="bg-transparent border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:ring-1 focus:ring-brand-purple glass">
-            <option className="bg-slate-900">Sort by Speed (Views/hr)</option>
-            <option className="bg-slate-900">Sort by Total Views</option>
-            <option className="bg-slate-900">Sort by Engagement</option>
+          <select
+            value={sortBy}
+            onChange={(e) => setSortBy(e.target.value)}
+            className="bg-transparent border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:ring-1 focus:ring-brand-purple glass cursor-pointer"
+          >
+            <option className="bg-slate-900" value="speed">Sort by Speed (Views/hr)</option>
+            <option className="bg-slate-900" value="views">Sort by Total Views</option>
+            <option className="bg-slate-900" value="engagement">Sort by Engagement</option>
           </select>
         </div>
       </div>
 
       {/* Results Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-        {MOCK_VIDEOS.map((video, idx) => (
-          <div key={video.id} className="glass-hover rounded-2xl overflow-hidden group flex flex-col" style={{ animationDelay: `${idx * 100}ms` }}>
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 min-h-[400px]">
+        {sortedVideos.map((video, idx) => (
+          <div key={video.id + idx} className="glass-hover rounded-2xl overflow-hidden group flex flex-col animate-fade-in" style={{ animationDelay: `${idx * 100}ms` }}>
             {/* Thumbnail */}
             <div className="relative aspect-video overflow-hidden">
               {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -206,21 +270,21 @@ export default function Dashboard() {
             {/* Content */}
             <div className="p-5 flex-1 flex flex-col justify-between">
               <div>
-                <h3 className="font-semibold text-white/90 line-clamp-2 leading-tight group-hover:text-brand-purple transition-colors">
+                <h3 className="font-semibold text-white/90 line-clamp-2 leading-tight group-hover:text-brand-purple transition-colors h-10">
                   {video.title}
                 </h3>
                 <p className="text-sm text-white/50 mt-2 flex items-center gap-2">
                   <span className="w-5 h-5 rounded-full bg-white/10 flex items-center justify-center text-[10px] shrink-0">
                     {video.channel.charAt(0)}
                   </span>
-                  {video.channel}
+                  <span className="truncate">{video.channel}</span>
                 </p>
               </div>
 
               {/* Metrics */}
               <div className="mt-5 pt-4 border-t border-white/10 grid grid-cols-2 gap-y-3 gap-x-2 text-sm">
                 <div>
-                  <div className="text-white/40 text-xs">Total Views</div>
+                  <div className="text-white/40 text-xs text-nowrap">Total Views</div>
                   <div className="font-medium text-white/90">{video.views}</div>
                 </div>
                 <div>
@@ -239,6 +303,13 @@ export default function Dashboard() {
             </div>
           </div>
         ))}
+
+        {!isSearching && sortedVideos.length === 0 && (
+          <div className="col-span-full py-20 text-center space-y-4">
+            <div className="text-4xl">🔍</div>
+            <p className="text-white/40 font-medium">Enter a keyword above to find viral videos.</p>
+          </div>
+        )}
       </div>
 
     </div>
