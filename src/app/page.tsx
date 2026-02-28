@@ -24,10 +24,10 @@ const MOCK_VIDEOS: Video[] = [
     id: "v1",
     title: "I Built a Secret Room in My House! (Undiscovered)",
     channel: "Creator X",
-    publishedAt: "2 days ago",
+    publishedAt: "2天前",
     views: "2.4M",
     likes: "150K",
-    speed: "51.0k views/hr",
+    speed: "5.1万播放/小时",
     speedRaw: 51000,
     viewsRaw: 2400000,
     engagementRaw: 0.0625,
@@ -38,10 +38,10 @@ const MOCK_VIDEOS: Video[] = [
     id: "v2",
     title: "10 AI Tools That Will Change Your Life in 2026",
     channel: "Tech Insiders",
-    publishedAt: "5 days ago",
+    publishedAt: "5天前",
     views: "1.1M",
     likes: "89K",
-    speed: "20.0k views/hr",
+    speed: "2.0万播放/小时",
     speedRaw: 20000,
     viewsRaw: 1100000,
     engagementRaw: 0.08,
@@ -60,6 +60,11 @@ export default function Dashboard() {
   const [sortBy, setSortBy] = useState("speed");
   const [isUsingMock, setIsUsingMock] = useState(true);
 
+  // New Search Filters
+  const [publishedAfter, setPublishedAfter] = useState("15");
+  const [searchOrder, setSearchOrder] = useState("viewCount");
+  const [videoDuration, setVideoDuration] = useState("any");
+
   // Load API Key from localStorage
   useEffect(() => {
     const savedKey = localStorage.getItem("yt_viral_api_key");
@@ -73,24 +78,19 @@ export default function Dashboard() {
 
   const handleSaveKey = () => {
     if (!apiKey.trim()) {
-      alert("Please enter a valid API Key");
+      alert("请输入有效的 API Key");
       return;
     }
     localStorage.setItem("yt_viral_api_key", apiKey.trim());
-    alert("API Key saved successfully!");
+    alert("API Key 保存成功！");
     setShowConfig(false);
   };
 
   const handleSearch = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!apiKey.trim()) {
-      alert("Please configure your API Key first to enable real searches.");
-      setShowConfig(true);
-      return;
-    }
 
     if (!keyword.trim()) {
-      alert("Please enter a keyword to search");
+      alert("请输入搜索关键词");
       return;
     }
 
@@ -100,7 +100,13 @@ export default function Dashboard() {
 
     try {
       const response = await axios.get('/api/youtube', {
-        params: { keyword, apiKey }
+        params: {
+          keyword,
+          apiKey,
+          publishedAfter,
+          order: searchOrder,
+          videoDuration
+        }
       });
 
       if (response.data.error) {
@@ -109,11 +115,11 @@ export default function Dashboard() {
 
       setVideos(response.data.videos);
       if (response.data.videos.length === 0) {
-        setError("No videos found for this keyword in the last 15 days.");
+        setError(`在最近 ${publishedAfter} 天内未找到与该关键词相关的视频。`);
       }
     } catch (err: any) {
       console.error(err);
-      setError(err.response?.data?.error || err.message || "Failed to fetch data. Check your API key.");
+      setError(err.response?.data?.error || err.message || "数据获取失败，请检查您的 API Key。");
       setIsUsingMock(true);
       setVideos(MOCK_VIDEOS);
     } finally {
@@ -137,26 +143,73 @@ export default function Dashboard() {
         <div className="absolute top-0 right-0 w-64 h-64 bg-brand-purple/20 blur-3xl rounded-full -mt-32 -mr-32 pointer-events-none" />
 
         <div className="flex flex-col md:flex-row md:items-end gap-6 relative z-10">
-          <form className="flex-1 space-y-2" onSubmit={handleSearch}>
-            <label className="text-sm font-medium text-white/70">Keyword Search</label>
-            <div className="flex gap-4">
-              <input
-                type="text"
-                placeholder="e.g. 'Tech Reviews', 'Cooking', 'Vlogs'"
-                value={keyword}
-                onChange={(e) => setKeyword(e.target.value)}
-                className="flex-1 bg-black/20 border border-white/10 rounded-xl px-4 py-3 text-white placeholder-white/40 focus:outline-none focus:ring-2 focus:ring-brand-purple/50 transition-all"
-              />
-              <button
-                type="submit"
-                disabled={isSearching}
-                className="px-8 py-3 rounded-xl bg-gradient-to-r from-brand-purple to-brand-pink text-white font-medium hover:opacity-90 transition-opacity disabled:opacity-50 flex items-center gap-2"
-              >
-                {isSearching ? "Searching..." : "Find Virals"}
-                {!isSearching && (
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
-                )}
-              </button>
+          <form className="flex-1 space-y-4" onSubmit={handleSearch}>
+            <div className="flex flex-col space-y-2">
+              <label className="text-sm font-medium text-white/70">关键词搜索</label>
+              <div className="flex gap-4">
+                <input
+                  type="text"
+                  placeholder="例如：科技评测、美食、Vlog"
+                  value={keyword}
+                  onChange={(e) => setKeyword(e.target.value)}
+                  className="flex-1 bg-black/20 border border-white/10 rounded-xl px-4 py-3 text-white placeholder-white/40 focus:outline-none focus:ring-2 focus:ring-brand-purple/50 transition-all"
+                />
+                <button
+                  type="submit"
+                  disabled={isSearching}
+                  className="px-8 py-3 rounded-xl bg-gradient-to-r from-brand-purple to-brand-pink text-white font-medium hover:opacity-90 transition-opacity disabled:opacity-50 flex items-center gap-2"
+                >
+                  {isSearching ? "搜索中..." : "搜索爆款"}
+                  {!isSearching && (
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
+                  )}
+                </button>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="space-y-2">
+                <label className="text-xs font-medium text-white/50">时间范围</label>
+                <select
+                  value={publishedAfter}
+                  onChange={(e) => setPublishedAfter(e.target.value)}
+                  className="w-full bg-black/20 border border-white/10 rounded-xl px-4 py-2 text-white text-sm focus:outline-none focus:ring-2 focus:ring-brand-purple/50 transition-all"
+                >
+                  <option value="1" className="bg-slate-900">最近24小时</option>
+                  <option value="7" className="bg-slate-900">最近7天</option>
+                  <option value="15" className="bg-slate-900">最近15天</option>
+                  <option value="30" className="bg-slate-900">最近30天</option>
+                  <option value="365" className="bg-slate-900">最近一年</option>
+                </select>
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-xs font-medium text-white/50">YouTube 排序方式</label>
+                <select
+                  value={searchOrder}
+                  onChange={(e) => setSearchOrder(e.target.value)}
+                  className="w-full bg-black/20 border border-white/10 rounded-xl px-4 py-2 text-white text-sm focus:outline-none focus:ring-2 focus:ring-brand-purple/50 transition-all"
+                >
+                  <option value="relevance" className="bg-slate-900">相关性</option>
+                  <option value="date" className="bg-slate-900">上传日期</option>
+                  <option value="viewCount" className="bg-slate-900">播放量</option>
+                  <option value="rating" className="bg-slate-900">评分</option>
+                </select>
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-xs font-medium text-white/50">视频时长</label>
+                <select
+                  value={videoDuration}
+                  onChange={(e) => setVideoDuration(e.target.value)}
+                  className="w-full bg-black/20 border border-white/10 rounded-xl px-4 py-2 text-white text-sm focus:outline-none focus:ring-2 focus:ring-brand-purple/50 transition-all"
+                >
+                  <option value="any" className="bg-slate-900">不限</option>
+                  <option value="short" className="bg-slate-900">短视频（&lt; 4分钟）</option>
+                  <option value="medium" className="bg-slate-900">中等（4 - 20分钟）</option>
+                  <option value="long" className="bg-slate-900">长视频（&gt; 20分钟）</option>
+                </select>
+              </div>
             </div>
           </form>
 
@@ -165,7 +218,7 @@ export default function Dashboard() {
             className="px-6 py-3 rounded-xl bg-white/5 border border-white/10 hover:bg-white/10 text-white transition-all flex items-center gap-2"
           >
             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
-            API Setup
+            API 配置
           </button>
         </div>
 
@@ -176,11 +229,11 @@ export default function Dashboard() {
               <div className="flex-1 space-y-4">
                 <h3 className="text-lg font-medium text-white flex items-center gap-2">
                   YouTube Data API v3
-                  {!apiKey && <span className="bg-red-500/20 text-red-400 text-xs px-2 py-1 rounded-full border border-red-500/30">Required</span>}
+                  {!apiKey && <span className="bg-red-500/20 text-red-400 text-xs px-2 py-1 rounded-full border border-red-500/30">必填</span>}
                 </h3>
                 <p className="text-sm text-white/50 leading-relaxed max-w-xl">
-                  To fetch live data, you need an API key from Google Cloud.
-                  Below is the mock data preview mode. Enter your key to unlock real-time viral analytics.
+                  要获取实时数据，您需要一个来自 Google Cloud 的 API Key。
+                  当前为模拟数据预览模式，输入您的 Key 以解锁实时爆款分析。
                 </p>
                 <div className="flex gap-4 max-w-xl">
                   <input
@@ -194,7 +247,7 @@ export default function Dashboard() {
                     onClick={handleSaveKey}
                     className="px-6 py-2 rounded-xl bg-gradient-to-r from-brand-purple to-brand-pink hover:opacity-90 text-white text-sm font-medium transition-colors"
                   >
-                    Save Key
+                    保存 Key
                   </button>
                 </div>
               </div>
@@ -202,9 +255,9 @@ export default function Dashboard() {
                 <div className="w-10 h-10 rounded-full bg-brand-purple/20 text-brand-purple flex items-center justify-center mb-2">
                   <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" /></svg>
                 </div>
-                <h4 className="text-sm font-medium text-white">Need a Key?</h4>
+                <h4 className="text-sm font-medium text-white">需要 Key？</h4>
                 <a href="https://console.cloud.google.com/" target="_blank" rel="noreferrer" className="text-xs text-brand-purple hover:text-brand-pink transition-colors underline underline-offset-2">
-                  Get your free YouTube API Key.
+                  免费获取 YouTube API Key
                 </a>
               </div>
             </div>
@@ -222,9 +275,9 @@ export default function Dashboard() {
       {/* Stats/Filter Bar */}
       <div className="flex items-center justify-between px-2">
         <h2 className="text-xl font-bold flex items-center gap-3">
-          {isSearching ? "Searching..." : isUsingMock ? "Mock Data Preview" : "Live Results"}
+          {isSearching ? "搜索中..." : isUsingMock ? "模拟数据预览" : "实时结果"}
           <span className="text-sm font-normal text-white/50 bg-white/5 px-3 py-1 rounded-full border border-white/10">
-            &le; 15 days ago
+            最近 {publishedAfter} {parseInt(publishedAfter) === 1 ? '天' : '天'}内
           </span>
         </h2>
 
@@ -234,9 +287,9 @@ export default function Dashboard() {
             onChange={(e) => setSortBy(e.target.value)}
             className="bg-transparent border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:ring-1 focus:ring-brand-purple glass cursor-pointer"
           >
-            <option className="bg-slate-900" value="speed">Sort by Speed (Views/hr)</option>
-            <option className="bg-slate-900" value="views">Sort by Total Views</option>
-            <option className="bg-slate-900" value="engagement">Sort by Engagement</option>
+            <option className="bg-slate-900" value="speed">按增速排序（播放/小时）</option>
+            <option className="bg-slate-900" value="views">按总播放量排序</option>
+            <option className="bg-slate-900" value="engagement">按互动率排序</option>
           </select>
         </div>
       </div>
@@ -246,7 +299,12 @@ export default function Dashboard() {
         {sortedVideos.map((video, idx) => (
           <div key={video.id + idx} className="glass-hover rounded-2xl overflow-hidden group flex flex-col animate-fade-in" style={{ animationDelay: `${idx * 100}ms` }}>
             {/* Thumbnail */}
-            <div className="relative aspect-video overflow-hidden">
+            <a
+              href={`https://www.youtube.com/watch?v=${video.id}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="relative aspect-video overflow-hidden block"
+            >
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
                 src={video.thumbnail}
@@ -258,21 +316,28 @@ export default function Dashboard() {
               {video.isHot && (
                 <div className="absolute top-3 right-3 bg-red-500 text-white text-xs font-bold px-2.5 py-1 rounded-md shadow-lg flex items-center gap-1 backdrop-blur-md">
                   <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M12.395 2.553a1 1 0 00-1.45-.385c-.345.23-.614.558-.822.88-.214.33-.403.713-.57 1.116-.334.804-.614 1.768-.84 2.734a31.365 31.365 0 00-.613 3.58 2.64 2.64 0 01-.945-1.067c-.328-.68-.398-1.534-.398-2.654A1 1 0 005.05 6.05 6.981 6.981 0 003 11a7 7 0 1011.95-4.95c-.592-.591-.98-.985-1.348-1.467-.363-.476-.724-1.063-1.207-2.03zM12.12 15.12A3 3 0 017 13s.879.5 2.5.5c0-1 .5-4 1.25-4.5.5 1 .786 1.293 1.371 1.879A2.99 2.99 0 0113 13a2.99 2.99 0 01-.879 2.121z" clipRule="evenodd" /></svg>
-                  SURGING
+                  爆款
                 </div>
               )}
 
               <div className="absolute bottom-3 right-3 font-mono text-xs bg-black/60 px-2 py-1 rounded backdrop-blur-sm">
                 {video.publishedAt}
               </div>
-            </div>
+            </a>
 
             {/* Content */}
             <div className="p-5 flex-1 flex flex-col justify-between">
               <div>
-                <h3 className="font-semibold text-white/90 line-clamp-2 leading-tight group-hover:text-brand-purple transition-colors h-10">
-                  {video.title}
-                </h3>
+                <a
+                  href={`https://www.youtube.com/watch?v=${video.id}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="block group"
+                >
+                  <h3 className="font-semibold text-white/90 line-clamp-2 leading-tight group-hover:text-brand-purple transition-colors h-10">
+                    {video.title}
+                  </h3>
+                </a>
                 <p className="text-sm text-white/50 mt-2 flex items-center gap-2">
                   <span className="w-5 h-5 rounded-full bg-white/10 flex items-center justify-center text-[10px] shrink-0">
                     {video.channel.charAt(0)}
@@ -284,17 +349,17 @@ export default function Dashboard() {
               {/* Metrics */}
               <div className="mt-5 pt-4 border-t border-white/10 grid grid-cols-2 gap-y-3 gap-x-2 text-sm">
                 <div>
-                  <div className="text-white/40 text-xs text-nowrap">Total Views</div>
+                  <div className="text-white/40 text-xs text-nowrap">总播放量</div>
                   <div className="font-medium text-white/90">{video.views}</div>
                 </div>
                 <div>
-                  <div className="text-white/40 text-xs">Likes</div>
+                  <div className="text-white/40 text-xs">点赞数</div>
                   <div className="font-medium text-white/90">{video.likes}</div>
                 </div>
                 <div className="col-span-2 bg-brand-purple/10 border border-brand-purple/20 rounded-lg p-2.5 flex justify-between items-center relative overflow-hidden">
                   <div className="absolute left-0 top-0 bottom-0 w-1 bg-brand-purple"></div>
                   <div>
-                    <div className="text-brand-purple/70 text-xs font-medium">Growth Speed</div>
+                    <div className="text-brand-purple/70 text-xs font-medium">增速</div>
                     <div className="font-bold text-brand-purple tracking-tight">{video.speed}</div>
                   </div>
                   <svg className="w-5 h-5 text-brand-purple/50 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" /></svg>
@@ -307,7 +372,7 @@ export default function Dashboard() {
         {!isSearching && sortedVideos.length === 0 && (
           <div className="col-span-full py-20 text-center space-y-4">
             <div className="text-4xl">🔍</div>
-            <p className="text-white/40 font-medium">Enter a keyword above to find viral videos.</p>
+            <p className="text-white/40 font-medium">请在上方输入关键词，搜索爆款视频。</p>
           </div>
         )}
       </div>

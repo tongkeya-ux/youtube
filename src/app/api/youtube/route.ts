@@ -7,16 +7,22 @@ const YOUTUBE_API_URL = 'https://www.googleapis.com/youtube/v3';
 export async function GET(request: Request) {
     const { searchParams } = new URL(request.url);
     const keyword = searchParams.get('keyword');
-    const apiKey = searchParams.get('apiKey');
+    const clientApiKey = searchParams.get('apiKey');
+    const publishedAfterDays = parseInt(searchParams.get('publishedAfter') || '15', 10);
+    const order = searchParams.get('order') || 'viewCount';
+    const videoDuration = searchParams.get('videoDuration') || 'any';
+
+    // 优先使用服务器环境变量中的 Key，其次使用前端传入的 Key
+    const apiKey = process.env.YOUTUBE_API_KEY || clientApiKey;
 
     if (!apiKey || !keyword) {
-        return NextResponse.json({ error: 'API Key and keyword are required' }, { status: 400 });
+        return NextResponse.json({ error: '需要配置 API Key 和搜索关键词' }, { status: 400 });
     }
 
     try {
-        // 1. Search for videos published in the last 15 days
+        // 1. Search for videos based on user criteria
         const publishedAfter = new Date();
-        publishedAfter.setDate(publishedAfter.getDate() - 15);
+        publishedAfter.setDate(publishedAfter.getDate() - publishedAfterDays);
 
         // We get top 50 results to have a good sample size for filtering
         const searchRes = await axios.get(`${YOUTUBE_API_URL}/search`, {
@@ -24,7 +30,8 @@ export async function GET(request: Request) {
                 part: 'snippet',
                 q: keyword,
                 type: 'video',
-                order: 'viewCount', // prioritize high views
+                order: order,
+                videoDuration: videoDuration !== 'any' ? videoDuration : undefined,
                 publishedAfter: publishedAfter.toISOString(),
                 maxResults: 50,
                 key: apiKey,
@@ -62,9 +69,9 @@ export async function GET(request: Request) {
 
             let speedStr = "";
             if (speedRaw > 1000) {
-                speedStr = (speedRaw / 1000).toFixed(1) + "k views/hr";
+                speedStr = (speedRaw / 1000).toFixed(1) + "万播放/小时";
             } else {
-                speedStr = Math.round(speedRaw) + " views/hr";
+                speedStr = Math.round(speedRaw) + " 播放/小时";
             }
 
             // Formatting numbers
@@ -83,8 +90,8 @@ export async function GET(request: Request) {
                 title: video.snippet.title,
                 channel: video.snippet.channelTitle,
                 publishedAt: daysSincePublished === 0
-                    ? `${hoursSincePublished} hours ago`
-                    : `${daysSincePublished} days ago`,
+                    ? `${hoursSincePublished} 小时前`
+                    : `${daysSincePublished} 天前`,
                 views: formatNumber(views),
                 likes: formatNumber(likes),
                 speed: speedStr,
