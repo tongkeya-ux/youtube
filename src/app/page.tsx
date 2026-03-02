@@ -65,6 +65,8 @@ export default function Dashboard() {
   const [searchOrder, setSearchOrder] = useState("viewCount");
   const [videoDuration, setVideoDuration] = useState("any");
 
+  const [minSpeed, setMinSpeed] = useState("0");
+
   // Load API Key from localStorage
   useEffect(() => {
     const savedKey = localStorage.getItem("yt_viral_api_key");
@@ -105,7 +107,8 @@ export default function Dashboard() {
           apiKey,
           publishedAfter,
           order: searchOrder,
-          videoDuration
+          videoDuration,
+          minSpeed
         }
       });
 
@@ -115,7 +118,7 @@ export default function Dashboard() {
 
       setVideos(response.data.videos);
       if (response.data.videos.length === 0) {
-        setError(`在最近 ${publishedAfter} 天内未找到与该关键词相关的视频。`);
+        setError(`在最近 ${publishedAfter} 天内未找到符合条件（最低增速 ${minSpeed} 播/小时）的视频。`);
       }
     } catch (err: any) {
       console.error(err);
@@ -167,7 +170,7 @@ export default function Dashboard() {
               </div>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
               <div className="space-y-2">
                 <label className="text-xs font-medium text-white/50">时间范围</label>
                 <select
@@ -184,7 +187,7 @@ export default function Dashboard() {
               </div>
 
               <div className="space-y-2">
-                <label className="text-xs font-medium text-white/50">YouTube 排序方式</label>
+                <label className="text-xs font-medium text-white/50">YouTube 排序</label>
                 <select
                   value={searchOrder}
                   onChange={(e) => setSearchOrder(e.target.value)}
@@ -205,13 +208,30 @@ export default function Dashboard() {
                   className="w-full bg-black/20 border border-white/10 rounded-xl px-4 py-2 text-white text-sm focus:outline-none focus:ring-2 focus:ring-brand-purple/50 transition-all"
                 >
                   <option value="any" className="bg-slate-900">不限</option>
-                  <option value="short" className="bg-slate-900">短视频（&lt; 4分钟）</option>
-                  <option value="medium" className="bg-slate-900">中等（4 - 20分钟）</option>
-                  <option value="long" className="bg-slate-900">长视频（&gt; 20分钟）</option>
+                  <option value="short" className="bg-slate-900">短视频 (&lt; 4分)</option>
+                  <option value="medium" className="bg-slate-900">中型 (4 - 20分)</option>
+                  <option value="long" className="bg-slate-900">长片 (&gt; 20分)</option>
+                </select>
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-xs font-medium text-white/50">最低增速筛选</label>
+                <select
+                  value={minSpeed}
+                  onChange={(e) => setMinSpeed(e.target.value)}
+                  className="w-full bg-black/20 border border-white/10 rounded-xl px-4 py-2 text-white text-sm focus:outline-none focus:ring-2 focus:ring-brand-purple/50 transition-all"
+                >
+                  <option value="0" className="bg-slate-900">不限增速</option>
+                  <option value="100" className="bg-slate-900">&gt; 100 播/小时</option>
+                  <option value="500" className="bg-slate-900">&gt; 500 播/小时</option>
+                  <option value="1000" className="bg-slate-900">&gt; 1k 播/小时</option>
+                  <option value="5000" className="bg-slate-900">&gt; 5k 播/小时</option>
+                  <option value="10000" className="bg-slate-900">&gt; 1万 播/小时</option>
                 </select>
               </div>
             </div>
           </form>
+
 
           <button
             onClick={() => setShowConfig(!showConfig)}
