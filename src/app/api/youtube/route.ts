@@ -1,5 +1,4 @@
 import { NextResponse } from 'next/server';
-import axios from 'axios';
 import { differenceInHours, differenceInDays } from 'date-fns';
 
 const YOUTUBE_API_URL = 'https://www.googleapis.com/youtube/v3';
@@ -19,30 +18,42 @@ export async function GET(request: Request) {
         return NextResponse.json({ error: '需要配置 API Key 和搜索关键词' }, { status: 400 });
     }
 
+    const trimmedKeyword = keyword.trim().replace(/\s+/g, ' ');
+
     try {
+        console.log(`[YouTube API] Starting search using fetch for: "${trimmedKeyword}" (days: ${days})`);
+
         // 1. Search for videos based on user filters
         const publishedAfterDate = new Date();
         publishedAfterDate.setDate(publishedAfterDate.getDate() - days);
 
-        const searchParamsObj: any = {
-            part: 'snippet',
-            q: keyword,
-            type: 'video',
-            order: order,
-            publishedAfter: publishedAfterDate.toISOString(),
-            maxResults: 50,
-            key: apiKey,
-        };
+        const searchUrl = new URL(`${YOUTUBE_API_URL}/search`);
+        searchUrl.searchParams.append('part', 'snippet');
+        searchUrl.searchParams.append('q', trimmedKeyword);
+        searchUrl.searchParams.append('type', 'video');
+        searchUrl.searchParams.append('order', order);
+        searchUrl.searchParams.append('publishedAfter', publishedAfterDate.toISOString());
+        searchUrl.searchParams.append('maxResults', '50');
+        searchUrl.searchParams.append('key', apiKey);
 
         if (videoDuration !== 'any') {
-            searchParamsObj.videoDuration = videoDuration;
+            searchUrl.searchParams.append('videoDuration', videoDuration);
         }
 
-        const searchRes = await axios.get(`${YOUTUBE_API_URL}/search`, {
-            params: searchParamsObj,
+        const searchRes = await fetch(searchUrl.toString(), {
+            signal: AbortSignal.timeout(15000), // 15s timeout
+            headers: { 'User-Agent': 'YouTube Viral Finder/1.0' }
         });
 
-        const items = searchRes.data.items || [];
+        if (!searchRes.ok) {
+            const error = await searchRes.json();
+            throw { response: { data: error, status: searchRes.status } };
+        }
+
+        const searchData = await searchRes.json();
+        const items = searchData.items || [];
+        console.log(`[YouTube API] Search complete. Found ${items.length} items.`);
+
         if (items.length === 0) {
             return NextResponse.json({ videos: [] });
         }
@@ -50,15 +61,24 @@ export async function GET(request: Request) {
         const videoIds = items.map((item: any) => item.id.videoId).join(',');
 
         // 2. Fetch statistics for these videos
-        const statsRes = await axios.get(`${YOUTUBE_API_URL}/videos`, {
-            params: {
-                part: 'statistics,snippet',
-                id: videoIds,
-                key: apiKey,
-            },
+        console.log(`[YouTube API] Fetching stats for ${items.length} videos...`);
+        const statsUrl = new URL(`${YOUTUBE_API_URL}/videos`);
+        statsUrl.searchParams.append('part', 'statistics,snippet');
+        statsUrl.searchParams.append('id', videoIds);
+        statsUrl.searchParams.append('key', apiKey);
+
+        const statsRes = await fetch(statsUrl.toString(), {
+            signal: AbortSignal.timeout(15000),
+            headers: { 'User-Agent': 'YouTube Viral Finder/1.0' }
         });
 
-        const videos = statsRes.data.items.map((video: any) => {
+        if (!statsRes.ok) {
+            const error = await statsRes.json();
+            throw { response: { data: error, status: statsRes.status } };
+        }
+
+        const statsData = await statsRes.json();
+        const videos = statsData.items.map((video: any) => {
             const publishedAt = new Date(video.snippet.publishedAt);
             const now = new Date();
 
@@ -89,7 +109,6 @@ export async function GET(request: Request) {
             };
 
             // Define "Hot" (Surging) logic
-            // e.g. > 5000 views per hour OR total views > 100k in less than 15 days
             const isHot = speedRaw > 5000 || (views > 100000 && daysSincePublished <= 15);
 
             return {
@@ -113,8 +132,8 @@ export async function GET(request: Request) {
         return NextResponse.json({ videos });
 
     } catch (error: any) {
-        const errorData = error.response?.data?.error;
-        console.error('YouTube API Error:', errorData || error.message);
+        const errorData = error.response?.data?.error || { message: error.message };
+        console.error('YouTube API Error:', errorData);
 
         let errorMessage = '获取 YouTube 数据失败';
         if (errorData?.reason === 'API_KEY_SERVICE_BLOCKED' || errorData?.message?.includes('blocked')) {
@@ -123,9 +142,14 @@ export async function GET(request: Request) {
             errorMessage = errorData.message;
         }
 
+        if (error.name === 'TimeoutError') {
+            errorMessage = '网络连接超时，请检查您的网络环境或代理设置。';
+        }
+
         return NextResponse.json(
             { error: errorMessage },
             { status: error.response?.status || 500 }
         );
     }
 }
+
