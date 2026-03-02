@@ -8,7 +8,7 @@ export async function GET(request: Request) {
     const { searchParams } = new URL(request.url);
     const keyword = searchParams.get('keyword');
     const clientApiKey = searchParams.get('apiKey');
-    const publishedAfterDays = parseInt(searchParams.get('publishedAfter') || '15', 10);
+    const days = parseInt(searchParams.get('publishedAfter') || '15', 10);
     const order = searchParams.get('order') || 'viewCount';
     const videoDuration = searchParams.get('videoDuration') || 'any';
 
@@ -20,22 +20,26 @@ export async function GET(request: Request) {
     }
 
     try {
-        // 1. Search for videos based on user criteria
-        const publishedAfter = new Date();
-        publishedAfter.setDate(publishedAfter.getDate() - publishedAfterDays);
+        // 1. Search for videos based on user filters
+        const publishedAfterDate = new Date();
+        publishedAfterDate.setDate(publishedAfterDate.getDate() - days);
 
-        // We get top 50 results to have a good sample size for filtering
+        const searchParamsObj: any = {
+            part: 'snippet',
+            q: keyword,
+            type: 'video',
+            order: order,
+            publishedAfter: publishedAfterDate.toISOString(),
+            maxResults: 50,
+            key: apiKey,
+        };
+
+        if (videoDuration !== 'any') {
+            searchParamsObj.videoDuration = videoDuration;
+        }
+
         const searchRes = await axios.get(`${YOUTUBE_API_URL}/search`, {
-            params: {
-                part: 'snippet',
-                q: keyword,
-                type: 'video',
-                order: order,
-                videoDuration: videoDuration !== 'any' ? videoDuration : undefined,
-                publishedAfter: publishedAfter.toISOString(),
-                maxResults: 50,
-                key: apiKey,
-            },
+            params: searchParamsObj,
         });
 
         const items = searchRes.data.items || [];
@@ -68,16 +72,19 @@ export async function GET(request: Request) {
             const speedRaw = views / hoursSincePublished;
 
             let speedStr = "";
-            if (speedRaw > 1000) {
-                speedStr = (speedRaw / 1000).toFixed(1) + "万播放/小时";
+            if (speedRaw > 10000) {
+                speedStr = (speedRaw / 10000).toFixed(1) + "万播放/小时";
+            } else if (speedRaw > 1000) {
+                speedStr = (speedRaw / 1000).toFixed(1) + "k 播放/小时";
             } else {
                 speedStr = Math.round(speedRaw) + " 播放/小时";
             }
 
-            // Formatting numbers
+            // Formatting numbers (Chinese style: 万, 亿)
             const formatNumber = (num: number) => {
-                if (num >= 1000000) return (num / 1000000).toFixed(1) + 'M';
-                if (num >= 1000) return (num / 1000).toFixed(1) + 'K';
+                if (num >= 100000000) return (num / 100000000).toFixed(1) + '亿';
+                if (num >= 10000) return (num / 10000).toFixed(1) + '万';
+                if (num >= 1000) return (num / 1000).toFixed(1) + 'k';
                 return num.toString();
             };
 
@@ -109,9 +116,9 @@ export async function GET(request: Request) {
         const errorData = error.response?.data?.error;
         console.error('YouTube API Error:', errorData || error.message);
 
-        let errorMessage = 'Failed to fetch YouTube data';
+        let errorMessage = '获取 YouTube 数据失败';
         if (errorData?.reason === 'API_KEY_SERVICE_BLOCKED' || errorData?.message?.includes('blocked')) {
-            errorMessage = 'YouTube Data API v3 has not been enabled for this API Key in Google Cloud Console. Please enable it to proceed.';
+            errorMessage = '该 API Key 尚未在 Google Cloud 控制台中启用 YouTube Data API v3 服务，请启用后重试。';
         } else if (errorData?.message) {
             errorMessage = errorData.message;
         }
